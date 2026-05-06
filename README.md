@@ -8,22 +8,24 @@ Product behavior is split into iterative specs in [docs/product-spec-index.md](d
 
 ## Run
 
-Set one model provider key when running agent workflows:
+The supported local agent workflow uses `llama-server` with GPT-OSS 20B.
 
 ```bash
-export OPENAI_API_KEY=...
+./scripts/llama-server.sh
 ```
 
-or:
+Start the Embabel shell in another terminal:
 
 ```bash
-export ANTHROPIC_API_KEY=...
+./scripts/llama-server-shell.sh
 ```
 
-Start the Embabel shell:
+The shell prompt accepts commands. Use `chat` to start a chat session, or inspect the runtime with commands such as `models`, `profiles`, and `agents`.
+
+If GPT-OSS 20B is not cached locally yet, run the server once with network access enabled:
 
 ```bash
-./scripts/shell.sh
+LLAMA_SERVER_OFFLINE=false ./scripts/llama-server.sh
 ```
 
 ## Test
