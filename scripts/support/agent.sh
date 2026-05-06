@@ -32,4 +32,10 @@ if [ ! -f "$POM_FILE" ]; then
 fi
 
 # Run Maven Spring Boot application
-"$SCRIPT_DIR/../../mvnw" -U -f "$POM_FILE" -Dmaven.test.skip=true spring-boot:run
+MAVEN_ARGS=("-U" "-f" "$POM_FILE" "-Dmaven.test.skip=true")
+
+if [ -n "${MAVEN_PROFILES:-}" ]; then
+    MAVEN_ARGS+=("-P${MAVEN_PROFILES}")
+fi
+
+"$SCRIPT_DIR/../../mvnw" "${MAVEN_ARGS[@]}" spring-boot:run

@@ -1,0 +1,8 @@
+models:
+  - name: "gemma_4_26b_a4b_it_q4_k_m"
+    model_id: "ggml-org/gemma-4-26B-A4B-it-GGUF:Q4_K_M"
+    display_name: "Gemma 4 26B A4B IT Q4_K_M"
+    max_tokens: 4096
+    temperature: 0.7
+
+embedding_models: []

@@ -114,6 +114,26 @@
                 </dependency>
             </dependencies>
         </profile>
+        <profile>
+            <id>llama-server-models</id>
+            <dependencies>
+                <dependency>
+                    <groupId>com.embabel.agent</groupId>
+                    <artifactId>embabel-agent-starter-openai</artifactId>
+                    <version>${embabel-agent.version}</version>
+                </dependency>
+            </dependencies>
+            <build>
+                <resources>
+                    <resource>
+                        <directory>${project.basedir}/src/main/resources</directory>
+                    </resource>
+                    <resource>
+                        <directory>${project.basedir}/src/llama-server/resources</directory>
+                    </resource>
+                </resources>
+            </build>
+        </profile>
     </profiles>
 
 </project>

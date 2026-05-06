@@ -6,6 +6,11 @@ echo "Checking environment variables..."
 OPENAI_KEY_MISSING=false
 ANTHROPIC_KEY_MISSING=false
 
+if [[ ",${SPRING_PROFILES_ACTIVE:-}," == *",llama-server,"* ]]; then
+    echo "llama-server Spring profile active: local OpenAI-compatible model endpoint will be used"
+    return 0 2>/dev/null || exit 0
+fi
+
 if [ -z "${OPENAI_API_KEY}" ]; then
     echo "OPENAI_API_KEY environment variable is not set"
     echo "OpenAI models will not be available"
