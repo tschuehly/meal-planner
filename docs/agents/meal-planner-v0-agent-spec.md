@@ -33,8 +33,8 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 
 | Fact Type | Producer | Consumers | Why It Belongs On The Blackboard |
 | --- | --- | --- | --- |
-| `HouseholdLunchPlanningRequest` | `ingestHouseholdLunchPlanningRequest` | `provideV0LunchPlanningDefaults`, `resolvePlanningHorizon`, `interpretLunchPlanningRequest` | It is the starting request fact for the one-shot plan. |
-| `LunchPlanningDefaults` | `provideV0LunchPlanningDefaults` | `interpretLunchPlanningRequest`, `draftLunchCandidates`, `validateWeeklyLunchPlan` | Defaults are domain policy, not prompt text. |
+| `HouseholdLunchPlanningRequest` | `ingestHouseholdLunchPlanningRequest` | `provideLunchPlanningDefaults`, `resolvePlanningHorizon`, `interpretLunchPlanningRequest` | It is the starting request fact for the one-shot plan. |
+| `LunchPlanningDefaults` | `provideLunchPlanningDefaults` | `interpretLunchPlanningRequest`, `draftLunchCandidates`, `validateWeeklyLunchPlan` | Defaults are domain policy, not prompt text. |
 | `PlanningHorizon` | `resolvePlanningHorizon` | `draftLunchCandidates`, `assembleWeeklyLunchPlan`, `formatWeeklyLunchPlanResponse` | The planner needs a typed target week and weekday slots. |
 | `RequestConstraints` | `interpretLunchPlanningRequest` | `draftLunchCandidates`, `validateWeeklyLunchPlan`, `formatWeeklyLunchPlanResponse` | Explicit safety and fit constraints must guide generation and be reported. |
 | `OneOffRecipeContext` | `interpretLunchPlanningRequest` | `draftLunchCandidates` | Pasted recipe text may influence the current plan without persistence. |
@@ -48,7 +48,7 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 | Step | Action | Inputs | Output | Purpose | LLM? | Tools? | Goal? |
 | --- | --- | --- | --- | --- | --- | --- | --- |
 | 0 | `ingestHouseholdLunchPlanningRequest` | `UserInput` | `HouseholdLunchPlanningRequest` | Adapt shell-style free text into the v0 request fact. | No | No | No |
-| 1 | `provideV0LunchPlanningDefaults` | `HouseholdLunchPlanningRequest` | `LunchPlanningDefaults` | Provide the supported v0 defaults for weekday lunches, effort, health tone, and household style. | No | No | No |
+| 1 | `provideLunchPlanningDefaults` | `HouseholdLunchPlanningRequest` | `LunchPlanningDefaults` | Provide the supported defaults for weekday lunches, effort, health tone, and household style. | No | No | No |
 | 2 | `resolvePlanningHorizon` | `HouseholdLunchPlanningRequest`, `LunchPlanningDefaults` | `PlanningHorizon` | Resolve the requested week, defaulting to next week, and create Monday-Friday lunch slots. | No | Optional date/time service | No |
 | 3 | `interpretLunchPlanningRequest` | `HouseholdLunchPlanningRequest`, `LunchPlanningDefaults` | `InterpretedLunchRequest` containing `RequestConstraints` and optional `OneOffRecipeContext` | Extract explicit constraints, preferences, allergies, intolerances, dislikes, nutrition priorities, effort hints, and pasted recipe context. | Yes | No | No |
 | 4 | `draftLunchCandidates` | `PlanningHorizon`, `LunchPlanningDefaults`, `RequestConstraints`, optional `OneOffRecipeContext` | `LunchCandidateSet` | Generate enough practical lunch options to support five weekday choices with fit reasons, prep notes, and rough nutrition. | Yes | No | No |
@@ -70,10 +70,10 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 
 | Status | Work Item | Notes |
 | --- | --- | --- |
-| done | Add v0 domain types | Request, defaults, horizon, constraints, recipe context, candidate, plan, validation, and response types live under `com.embabel.mealplanner.v0`. |
+| done | Add domain types | Request, defaults, horizon, constraints, recipe context, candidate, plan, validation, and response types live under `com.embabel.mealplanner.agent`. |
 | done | Add deterministic defaults and planning-horizon action | The default is next week, Monday through Friday; explicit ISO dates and simple week phrases resolve deterministically. |
-| done | Add LLM prompt resources for request interpretation, candidate drafting, plan assembly, and response formatting | Prompt resources live under `src/main/resources/prompts/v0`. |
-| done | Add Embabel agent actions for the GOAP flow | `MealPlannerV0Agent` wires typed actions from shell-style `UserInput` to `WeeklyLunchPlanResponse`. |
+| done | Add LLM prompt resources for request interpretation, candidate drafting, plan assembly, and response formatting | Prompt resources live under `src/main/resources/prompts/meal-planner`. |
+| done | Add Embabel agent actions for the GOAP flow | `MealPlannerAgent` wires typed actions from shell-style `UserInput` to `WeeklyLunchPlanResponse`. |
 | done | Add shell-facing invocation path | `ingestHouseholdLunchPlanningRequest` adapts Embabel shell `UserInput` into the v0 request fact. |
 | done | Add validation logic | Validation checks five weekday lunches, visible constraint handling, rough nutrition notes, assumptions, and non-shaming tone. |
 | done | Add focused tests | Tests cover deterministic defaults, week resolution, prompt wiring, validation, and annotated agent metadata. |

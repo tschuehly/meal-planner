@@ -1,4 +1,4 @@
-package com.embabel.mealplanner.v0
+package com.embabel.mealplanner.agent
 
 import com.embabel.agent.api.annotation.support.AgentMetadataReader
 import com.embabel.agent.test.unit.FakeOperationContext
@@ -13,18 +13,18 @@ import java.time.Instant
 import java.time.LocalDate
 import java.time.ZoneId
 
-class MealPlannerV0AgentTest {
+class MealPlannerAgentTest {
 
     private val clock: Clock = Clock.fixed(
         Instant.parse("2026-05-06T10:00:00Z"),
         ZoneId.of("Europe/Berlin"),
     )
-    private val agent = MealPlannerV0Agent(clock, MealPlannerV0PromptLibrary())
+    private val agent = MealPlannerAgent(clock, MealPlannerPromptLibrary())
 
     @Test
     fun `default planning horizon is next Monday through Friday`() {
         val request = HouseholdLunchPlanningRequest("Plan easy high-protein lunches.")
-        val defaults = agent.provideV0LunchPlanningDefaults(request)
+        val defaults = agent.provideLunchPlanningDefaults(request)
 
         val horizon = agent.resolvePlanningHorizon(request, defaults)
 
@@ -37,7 +37,7 @@ class MealPlannerV0AgentTest {
     @Test
     fun `explicit ISO date resolves to the containing weekday week`() {
         val request = HouseholdLunchPlanningRequest("Plan lunches for the week of 2026-06-17.")
-        val defaults = agent.provideV0LunchPlanningDefaults(request)
+        val defaults = agent.provideLunchPlanningDefaults(request)
 
         val horizon = agent.resolvePlanningHorizon(request, defaults)
 
@@ -67,8 +67,8 @@ class MealPlannerV0AgentTest {
         assertEquals(expected, result)
         val prompt = context.llmInvocations.first().prompt
         assertTrue(prompt.contains("avoid mushrooms"))
-        assertTrue(prompt.contains("v0 Defaults"))
-        assertEquals("meal-planner-v0-interpret-request", context.llmInvocations.first().interaction.id.value)
+        assertTrue(prompt.contains("Defaults"))
+        assertEquals("meal-planner-interpret-request", context.llmInvocations.first().interaction.id.value)
     }
 
     @Test
@@ -112,7 +112,7 @@ class MealPlannerV0AgentTest {
     }
 
     @Test
-    fun `agent metadata exposes the v0 goal and expected actions`() {
+    fun `agent metadata exposes the goal and expected actions`() {
         val metadata = AgentMetadataReader().createAgentMetadata(agent) as CoreAgent
 
         assertTrue(

@@ -1,11 +1,11 @@
-package com.embabel.mealplanner.v0
+package com.embabel.mealplanner.agent
 
 import org.springframework.context.annotation.Bean
 import org.springframework.context.annotation.Configuration
 import java.time.Clock
 
 @Configuration
-class MealPlannerV0Configuration {
+class MealPlannerConfiguration {
 
     @Bean
     fun mealPlannerClock(): Clock = Clock.systemDefaultZone()

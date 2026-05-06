@@ -1,4 +1,4 @@
-package com.embabel.mealplanner.v0
+package com.embabel.mealplanner.agent
 
 import com.embabel.agent.api.annotation.AchievesGoal
 import com.embabel.agent.api.annotation.Action
@@ -13,13 +13,13 @@ import java.time.temporal.TemporalAdjusters
 @Agent(
     description = "Creates one-shot weekday lunch plans for Thomas and Cassandra from a free-text household request.",
 )
-class MealPlannerV0Agent(
+class MealPlannerAgent(
     private val clock: Clock,
-    private val prompts: MealPlannerV0PromptLibrary,
+    private val prompts: MealPlannerPromptLibrary,
 ) {
 
     @Action(
-        description = "Convert shell user input into a v0 household lunch-planning request.",
+        description = "Convert shell user input into a household lunch-planning request.",
         readOnly = true,
     )
     fun ingestHouseholdLunchPlanningRequest(userInput: UserInput): HouseholdLunchPlanningRequest =
@@ -29,10 +29,10 @@ class MealPlannerV0Agent(
         )
 
     @Action(
-        description = "Provide the supported v0 lunch-planning defaults.",
+        description = "Provide the supported lunch-planning defaults.",
         readOnly = true,
     )
-    fun provideV0LunchPlanningDefaults(
+    fun provideLunchPlanningDefaults(
         request: HouseholdLunchPlanningRequest,
     ): LunchPlanningDefaults {
         require(request.content.isNotBlank()) { "Lunch-planning request must not be blank." }
@@ -75,8 +75,8 @@ class MealPlannerV0Agent(
     ): InterpretedLunchRequest =
         context.ai()
             .withDefaultLlm()
-            .withId("meal-planner-v0-interpret-request")
-            .withSystemPrompt("You extract typed household lunch-planning facts for the supported v0 workflow.")
+            .withId("meal-planner-interpret-request")
+            .withSystemPrompt("You extract typed household lunch-planning facts for the supported workflow.")
             .createObject(
                 prompt = buildInterpretPrompt(request, defaults),
                 outputClass = InterpretedLunchRequest::class.java,
@@ -95,7 +95,7 @@ class MealPlannerV0Agent(
     ): LunchCandidateSet =
         context.ai()
             .withDefaultLlm()
-            .withId("meal-planner-v0-draft-candidates")
+            .withId("meal-planner-draft-candidates")
             .withSystemPrompt("You draft practical lunch candidates for Thomas and Cassandra without using tools.")
             .createObject(
                 prompt = buildCandidatePrompt(horizon, defaults, constraints, oneOffRecipeContext),
@@ -115,8 +115,8 @@ class MealPlannerV0Agent(
     ): WeeklyLunchPlan =
         context.ai()
             .withDefaultLlm()
-            .withId("meal-planner-v0-assemble-plan")
-            .withSystemPrompt("You assemble a one-shot weekly lunch plan for the supported v0 workflow.")
+            .withId("meal-planner-assemble-plan")
+            .withSystemPrompt("You assemble a one-shot weekly lunch plan for the supported workflow.")
             .createObject(
                 prompt = buildAssemblyPrompt(horizon, defaults, constraints, candidates),
                 outputClass = WeeklyLunchPlan::class.java,
@@ -161,7 +161,7 @@ class MealPlannerV0Agent(
         }
 
         require(plan.assumptions.isNotEmpty()) {
-            "Plan must include assumptions for underspecified v0 planning details."
+            "Plan must include assumptions for underspecified planning details."
         }
         notes += "Plan includes assumptions the household can correct later."
 
@@ -195,7 +195,7 @@ class MealPlannerV0Agent(
     ): WeeklyLunchPlanResponse {
         val content = context.ai()
             .withDefaultLlm()
-            .withId("meal-planner-v0-format-response")
+            .withId("meal-planner-format-response")
             .withSystemPrompt("You write concise, practical command-line meal-planning responses.")
             .createObject(
                 prompt = buildResponsePrompt(validatedPlan, horizon, constraints),
@@ -234,7 +234,7 @@ class MealPlannerV0Agent(
         # Household Request
         ${request.content}
 
-        # v0 Defaults
+        # Defaults
         ${defaults.asPromptBlock()}
     """.trimIndent()
 
@@ -249,7 +249,7 @@ class MealPlannerV0Agent(
         # Planning Horizon
         ${horizon.asPromptBlock()}
 
-        # v0 Defaults
+        # Defaults
         ${defaults.asPromptBlock()}
 
         # Request Constraints
@@ -270,7 +270,7 @@ class MealPlannerV0Agent(
         # Planning Horizon
         ${horizon.asPromptBlock()}
 
-        # v0 Defaults
+        # Defaults
         ${defaults.asPromptBlock()}
 
         # Request Constraints

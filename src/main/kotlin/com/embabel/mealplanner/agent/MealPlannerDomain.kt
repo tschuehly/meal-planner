@@ -1,4 +1,4 @@
-package com.embabel.mealplanner.v0
+package com.embabel.mealplanner.agent
 
 import com.embabel.agent.api.common.SomeOf
 import com.embabel.agent.domain.io.SystemOutput
