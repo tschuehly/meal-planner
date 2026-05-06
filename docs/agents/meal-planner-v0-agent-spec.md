@@ -37,7 +37,7 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 | `LunchPlanningDefaults` | `provideLunchPlanningDefaults` | `interpretLunchPlanningRequest`, `draftLunchCandidates`, `validateWeeklyLunchPlan` | Defaults are domain policy, not prompt text. |
 | `PlanningHorizon` | `resolvePlanningHorizon` | `draftLunchCandidates`, `assembleWeeklyLunchPlan`, `formatWeeklyLunchPlanResponse` | The planner needs a typed target week and weekday slots. |
 | `RequestConstraints` | `interpretLunchPlanningRequest` | `draftLunchCandidates`, `validateWeeklyLunchPlan`, `formatWeeklyLunchPlanResponse` | Explicit safety and fit constraints must guide generation and be reported. |
-| `OneOffRecipeContext` | `interpretLunchPlanningRequest` | `draftLunchCandidates` | Pasted recipe text may influence the current plan without persistence. |
+| `OneOffRecipeContext` | `interpretLunchPlanningRequest` | `draftLunchCandidates`, `formatWeeklyLunchPlanResponse` | Pasted recipe text may influence the current plan and final note without persistence. |
 | `LunchCandidateSet` | `draftLunchCandidates` | `assembleWeeklyLunchPlan` | Candidate meals are useful intermediate domain objects for selection. |
 | `WeeklyLunchPlan` | `assembleWeeklyLunchPlan` or repair inside `validateWeeklyLunchPlan` | `validateWeeklyLunchPlan`, `formatWeeklyLunchPlanResponse` | The selected plan should be valid before presentation. |
 | `ValidatedWeeklyLunchPlan` | `validateWeeklyLunchPlan` | `formatWeeklyLunchPlanResponse` | Validation records that the plan has five lunches, visible constraints, rough nutrition, assumptions, and practical tone. |
@@ -52,9 +52,19 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 | 2 | `resolvePlanningHorizon` | `HouseholdLunchPlanningRequest`, `LunchPlanningDefaults` | `PlanningHorizon` | Resolve the requested week, defaulting to next week, and create Monday-Friday lunch slots. | No | Optional date/time service | No |
 | 3 | `interpretLunchPlanningRequest` | `HouseholdLunchPlanningRequest`, `LunchPlanningDefaults` | `InterpretedLunchRequest` containing `RequestConstraints` and optional `OneOffRecipeContext` | Extract explicit constraints, preferences, allergies, intolerances, dislikes, nutrition priorities, effort hints, and pasted recipe context. | Yes | No | No |
 | 4 | `draftLunchCandidates` | `PlanningHorizon`, `LunchPlanningDefaults`, `RequestConstraints`, optional `OneOffRecipeContext` | `LunchCandidateSet` | Generate enough practical lunch options to support five weekday choices with fit reasons, prep notes, and rough nutrition. | Yes | No | No |
-| 5 | `assembleWeeklyLunchPlan` | `PlanningHorizon`, `LunchPlanningDefaults`, `RequestConstraints`, `LunchCandidateSet` | `WeeklyLunchPlan` | Select five lunches, assign them to weekdays, preserve variety and practicality, and record assumptions. | Yes | No | No |
-| 6 | `validateWeeklyLunchPlan` | `WeeklyLunchPlan`, `RequestConstraints`, `LunchPlanningDefaults` | `ValidatedWeeklyLunchPlan` | Inspect the plan, repair invalid structure or missing required content with a bounded model call, then validate the repaired plan. | Conditional | No | No |
-| 7 | `formatWeeklyLunchPlanResponse` | `ValidatedWeeklyLunchPlan`, `PlanningHorizon`, `RequestConstraints` | `WeeklyLunchPlanResponse` | Produce the structured command-line response in the supported format. | Yes | No | Yes |
+| 5 | `assembleWeeklyLunchPlan` | `PlanningHorizon`, `LunchPlanningDefaults`, `RequestConstraints`, `LunchCandidateSet` | `WeeklyLunchPlan` | Select five lunches, assign them to weekdays, preserve variety and practicality, and record assumptions plus visible constraint handling. | Yes | No | No |
+| 6 | `validateWeeklyLunchPlan` | `WeeklyLunchPlan`, `RequestConstraints`, `LunchPlanningDefaults` | `ValidatedWeeklyLunchPlan` | Inspect the plan, repair invalid structure or unsupported content with a bounded model call, then validate the repaired plan. | Conditional | No | No |
+| 7 | `formatWeeklyLunchPlanResponse` | `ValidatedWeeklyLunchPlan`, `PlanningHorizon`, `RequestConstraints`, optional `OneOffRecipeContext` | `WeeklyLunchPlanResponse` | Produce the structured command-line response in the supported format. | Yes | No | Yes |
+
+## Structured Output Contracts
+
+| Action | Output Type | Required Shape | Nullable/Absent Values | Validation And Defaults | Examples Needed | Formatter Truthfulness Risk |
+| --- | --- | --- | --- | --- | --- | --- |
+| `interpretLunchPlanningRequest` | `LlmInterpretedLunchRequest` converted to `InterpretedLunchRequest` | `requestConstraints` plus optional LLM recipe context. Domain `OneOffRecipeContext` still requires a summary. | Absent or empty recipe context normalizes to `null` before blackboard binding. | A tolerant LLM boundary type absorbs `{}` and converts only meaningful recipe context into the strict domain type. | No-context and with-context examples. | The formatter receives optional recipe context directly and mentions recipe context only when present. |
+| `draftLunchCandidates` | `LunchCandidateSet` | Enough candidates to choose five lunches with title, description, fit, nutrition, prep, constraints, and ingredients. | Optional prep notes and constraint handling may be empty. | Candidate content is checked through plan validation after assembly. | Not required for v0. | Candidate text is not user-visible unless selected into a validated plan. |
+| `assembleWeeklyLunchPlan` | `WeeklyLunchPlan` | Five Monday-Friday lunches with visible constraints and assumptions. | Empty assumptions or missing visible constraint coverage remain invalid. | Validation checks structure, assumptions, full visible constraint coverage, tone, and known unsupported nutrition claims. | Not required for v0. | The validated plan is the source for response formatting. |
+| `repairWeeklyLunchPlan` | `WeeklyLunchPlan` | Corrected plan preserving valid content. | Missing required content remains invalid until repaired. | Bounded repair loop allows two attempts, then fails loudly. | Not required for v0. | Repaired plan must pass validation before formatting. |
+| `formatWeeklyLunchPlanResponse` | `String` lunch body wrapped with deterministic factual sections in `WeeklyLunchPlanResponse` | LLM writes only the Monday-Friday lunch body; code writes week, constraints, assumptions, and recipe-context note. | Recipe context note is omitted when context is absent. | Prompt receives the validated plan, request constraints, planning horizon, and optional recipe context; application code adds factual boilerplate from typed state. | Not required for v0. | Formatter has all facts it may mention, and factual sections are deterministic. |
 
 ## Advanced Pattern Decisions
 
@@ -76,6 +86,8 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 | done | Add Embabel agent actions for the GOAP flow | `MealPlannerAgent` wires typed actions from shell-style `UserInput` to `WeeklyLunchPlanResponse`. |
 | done | Add shell-facing invocation path | `ingestHouseholdLunchPlanningRequest` adapts Embabel shell `UserInput` into the v0 request fact. |
 | done | Add validation and repair logic | Validation checks five weekday lunches, visible constraint handling, rough nutrition notes, assumptions, and non-shaming tone; invalid plans receive up to two repair attempts. |
+| done | Add structured-output safeguards | Interpretation uses a tolerant LLM boundary type, absent recipe context normalizes to `null`, and strict domain recipe context still requires a summary. |
+| done | Add deterministic factual response sections | The LLM writes the lunch body; application code adds the week, constraints, assumptions, and recipe-context note from typed state. |
 | done | Add focused tests | Tests cover deterministic defaults, week resolution, prompt wiring, validation, bounded repair, and annotated agent metadata. |
 | pending | Verify with the local shell | Run the v0 acceptance prompt against the supported llama-server shell and inspect the live model response. |
 
@@ -83,15 +95,18 @@ The outcome is one-shot. The v0 agent does not keep durable state, wait for foll
 
 | Status | Check | Notes |
 | --- | --- | --- |
-| done | `./mvnw clean test` | Compiles and runs focused tests. |
+| done | `./mvnw test` | Compiles and runs focused tests. |
 | done | Default week behavior | No week in the request resolves to next week. |
 | done | Five-lunch structure | Validation requires Monday through Friday lunches. |
 | done | Constraint handling | Validation requires visible constraint handling when constraints are present. |
 | done | Rough nutrition notes | Validation requires a rough nutrition note on each meal. |
 | done | Assumptions section | Validation requires assumptions in the plan. |
 | done | Non-shaming tone | Validation rejects a small set of moralizing and calorie-compliance terms. |
+| done | Structured-output binding acceptance | Tests cover empty optional recipe context normalization through the tolerant LLM boundary type and formatter prompts for absent and present recipe context. |
+| done | Constraint coverage acceptance | Tests cover missing and partially surfaced visible constraints. |
+| done | Nutrition claim guard | Validation repairs known unsupported nutrient-source claims such as omega-3 from broccoli. |
 | done | Repair behavior | Invalid plans trigger a repair prompt and repeated invalid repairs fail after the bounded attempts. |
-| pending | One-off recipe behavior | Prompting supports pasted recipe text as request-local context; live shell behavior still needs model verification. |
+| done | One-off recipe behavior | Prompting supports pasted recipe text as request-local context and response formatting receives recipe context explicitly. |
 
 ## Open Questions
 

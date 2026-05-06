@@ -56,7 +56,12 @@ class MealPlannerAgentTest {
                 assumptions = listOf(PlanningAssumption("Lunches can use leftovers.")),
             ),
         )
-        context.expectResponse(expected)
+        context.expectResponse(
+            LlmInterpretedLunchRequest(
+                requestConstraints = expected.requestConstraints,
+                oneOffRecipeContext = null,
+            ),
+        )
 
         val result = agent.interpretLunchPlanningRequest(
             HouseholdLunchPlanningRequest("Plan next week and avoid mushrooms."),
@@ -69,6 +74,26 @@ class MealPlannerAgentTest {
         assertTrue(prompt.contains("avoid mushrooms"))
         assertTrue(prompt.contains("Defaults"))
         assertEquals("meal-planner-interpret-request", context.llmInvocations.first().interaction.id.value)
+    }
+
+    @Test
+    fun `interpret action normalizes empty recipe context to absent`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse(
+            LlmInterpretedLunchRequest(
+                requestConstraints = RequestConstraints(ingredientsToUse = listOf("chickpeas")),
+                oneOffRecipeContext = LlmOneOffRecipeContext(),
+            ),
+        )
+
+        val result = agent.interpretLunchPlanningRequest(
+            HouseholdLunchPlanningRequest("Use chickpeas if they fit."),
+            LunchPlanningDefaults(),
+            context,
+        )
+
+        assertEquals(null, result.oneOffRecipeContext)
+        assertTrue(context.llmInvocations.first().prompt.contains("oneOffRecipeContext"))
     }
 
     @Test
@@ -102,7 +127,7 @@ class MealPlannerAgentTest {
 
         assertEquals(validPlan(), validated.plan)
         assertEquals("meal-planner-repair-plan-1", context.llmInvocations.first().interaction.id.value)
-        assertTrue(context.llmInvocations.first().prompt.contains("visible constraint handling"))
+        assertTrue(context.llmInvocations.first().prompt.contains("mushrooms"))
     }
 
     @Test
@@ -114,13 +139,47 @@ class MealPlannerAgentTest {
         val validated = agent.validateWeeklyLunchPlan(plan, RequestConstraints(), LunchPlanningDefaults(), context)
 
         assertEquals(validPlan(), validated.plan)
+        assertEquals("meal-planner-repair-plan-1", context.llmInvocations.first().interaction.id.value)
         assertTrue(context.llmInvocations.first().prompt.contains("assumptions"))
+    }
+
+    @Test
+    fun `validation repairs partially surfaced visible constraints`() {
+        val context = FakeOperationContext.create()
+        val repaired = validPlan().copy(
+            visibleConstraintHandling = listOf("Avoid mushrooms.", "Avoid peanuts."),
+        )
+        context.expectResponse(repaired)
+        val plan = validPlan().copy(visibleConstraintHandling = listOf("Avoid mushrooms."))
+        val constraints = RequestConstraints(avoidIngredients = listOf("mushrooms", "peanuts"))
+
+        val validated = agent.validateWeeklyLunchPlan(plan, constraints, LunchPlanningDefaults(), context)
+
+        assertEquals(repaired, validated.plan)
+        assertTrue(context.llmInvocations.first().prompt.contains("peanuts"))
+    }
+
+    @Test
+    fun `validation repairs unsupported nutrition claims`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse(validPlan())
+        val badLunch = validPlan().lunches.first().copy(
+            nutritionNote = "High protein with omega-3 from broccoli.",
+        )
+        val plan = validPlan().copy(lunches = listOf(badLunch) + validPlan().lunches.drop(1))
+
+        val validated = agent.validateWeeklyLunchPlan(plan, RequestConstraints(), LunchPlanningDefaults(), context)
+
+        assertEquals(validPlan(), validated.plan)
+        assertEquals("meal-planner-repair-plan-1", context.llmInvocations.first().interaction.id.value)
+        assertTrue(context.llmInvocations.first().prompt.contains("omega-3 from broccoli"))
     }
 
     @Test
     fun `validation fails after bounded unsuccessful repairs`() {
         val context = FakeOperationContext.create()
-        val invalidPlan = validPlan().copy(assumptions = emptyList())
+        val invalidLunch = validPlan().lunches.first().copy(title = "")
+        val invalidPlan = validPlan().copy(lunches = listOf(invalidLunch) + validPlan().lunches.drop(1))
         context.expectResponse(invalidPlan)
         context.expectResponse(invalidPlan)
 
@@ -130,6 +189,53 @@ class MealPlannerAgentTest {
 
         assertTrue(failure.message!!.contains("2 repair attempts"))
         assertEquals(2, context.llmInvocations.size)
+    }
+
+    @Test
+    fun `format response prompt does not mention absent recipe context`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse("Week: 2026-05-11 to 2026-05-15")
+
+        val response = agent.formatWeeklyLunchPlanResponse(
+            validatedPlan = ValidatedWeeklyLunchPlan(validPlan(), listOf("Plan contains 5 lunches.")),
+            horizon = PlanningHorizon(
+                weekStart = LocalDate.of(2026, 5, 11),
+                weekEnd = LocalDate.of(2026, 5, 15),
+                slots = emptyList(),
+                source = "Test.",
+            ),
+            constraints = RequestConstraints(),
+            oneOffRecipeContext = null,
+            context = context,
+        )
+
+        val prompt = context.llmInvocations.first().prompt
+        assertTrue(prompt.contains("# One-Off Recipe Context"))
+        assertTrue(prompt.contains("None provided."))
+        assertTrue("Recipe context:" !in response.content)
+    }
+
+    @Test
+    fun `format response prompt includes provided recipe context`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse("Week: 2026-05-11 to 2026-05-15")
+
+        val response = agent.formatWeeklyLunchPlanResponse(
+            validatedPlan = ValidatedWeeklyLunchPlan(validPlan(), listOf("Plan contains 5 lunches.")),
+            horizon = PlanningHorizon(
+                weekStart = LocalDate.of(2026, 5, 11),
+                weekEnd = LocalDate.of(2026, 5, 15),
+                slots = emptyList(),
+                source = "Test.",
+            ),
+            constraints = RequestConstraints(),
+            oneOffRecipeContext = OneOffRecipeContext(summary = "Pasted chickpea salad recipe."),
+            context = context,
+        )
+
+        val prompt = context.llmInvocations.first().prompt
+        assertTrue(prompt.contains("Pasted chickpea salad recipe."))
+        assertTrue(response.content.contains("Recipe context: Used only for this run."))
     }
 
     @Test
