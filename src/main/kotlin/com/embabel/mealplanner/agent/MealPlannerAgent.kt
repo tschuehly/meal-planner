@@ -130,50 +130,119 @@ class MealPlannerAgent(
         plan: WeeklyLunchPlan,
         constraints: RequestConstraints,
         defaults: LunchPlanningDefaults,
+        context: OperationContext,
     ): ValidatedWeeklyLunchPlan {
+        var currentPlan = plan
+        var repairAttempt = 0
+
+        while (true) {
+            val validation = inspectWeeklyLunchPlan(currentPlan, constraints, defaults)
+            if (validation.issues.isEmpty()) {
+                return ValidatedWeeklyLunchPlan(plan = currentPlan, validationNotes = validation.notes)
+            }
+
+            if (repairAttempt >= MAX_REPAIR_ATTEMPTS) {
+                error(
+                    "Weekly lunch plan is invalid after $MAX_REPAIR_ATTEMPTS repair attempts: " +
+                        validation.issues.joinToString("; "),
+                )
+            }
+
+            repairAttempt += 1
+            currentPlan = repairWeeklyLunchPlan(
+                plan = currentPlan,
+                constraints = constraints,
+                defaults = defaults,
+                issues = validation.issues,
+                attempt = repairAttempt,
+                context = context,
+            )
+        }
+    }
+
+    private fun inspectWeeklyLunchPlan(
+        plan: WeeklyLunchPlan,
+        constraints: RequestConstraints,
+        defaults: LunchPlanningDefaults,
+    ): ValidationInspection {
         val notes = mutableListOf<String>()
-        require(plan.lunches.size == defaults.mealCount) {
-            "Expected ${defaults.mealCount} weekday lunches, got ${plan.lunches.size}."
+        val issues = mutableListOf<String>()
+
+        if (plan.lunches.size == defaults.mealCount) {
+            notes += "Plan contains ${defaults.mealCount} lunches."
+        } else {
+            issues += "Expected ${defaults.mealCount} weekday lunches, got ${plan.lunches.size}."
         }
 
         val expectedDays = DayOfWeek.entries
             .filter { it.value in DayOfWeek.MONDAY.value..DayOfWeek.FRIDAY.value }
             .take(defaults.mealCount)
         val actualDays = plan.lunches.map { it.day }
-        require(actualDays == expectedDays) {
-            "Expected Monday-Friday lunches in order, got $actualDays."
+        if (actualDays == expectedDays) {
+            notes += "Plan contains Monday-Friday lunches in order."
+        } else {
+            issues += "Expected Monday-Friday lunches in order, got $actualDays."
         }
-        notes += "Plan contains ${defaults.mealCount} Monday-Friday lunches."
 
         plan.lunches.forEach { lunch ->
-            require(lunch.title.isNotBlank()) { "Lunch for ${lunch.day} must have a title." }
-            require(lunch.description.isNotBlank()) { "Lunch for ${lunch.day} must have a description." }
-            require(lunch.whyItFits.isNotBlank()) { "Lunch for ${lunch.day} must explain why it fits." }
-            require(lunch.nutritionNote.isNotBlank()) { "Lunch for ${lunch.day} must include a rough nutrition note." }
+            if (lunch.title.isBlank()) {
+                issues += "Lunch for ${lunch.day} must have a title."
+            }
+            if (lunch.description.isBlank()) {
+                issues += "Lunch for ${lunch.day} must have a description."
+            }
+            if (lunch.whyItFits.isBlank()) {
+                issues += "Lunch for ${lunch.day} must explain why it fits."
+            }
+            if (lunch.nutritionNote.isBlank()) {
+                issues += "Lunch for ${lunch.day} must include a rough nutrition note."
+            }
         }
-        notes += "Each lunch includes a fit reason and rough nutrition note."
+        if (issues.none { it.startsWith("Lunch for ") }) {
+            notes += "Each lunch includes a title, description, fit reason, and rough nutrition note."
+        }
 
         if (constraints.hasVisibleConstraints()) {
-            require(plan.visibleConstraintHandling.isNotEmpty()) {
-                "Requests with explicit constraints must include visible constraint handling."
+            if (plan.visibleConstraintHandling.isNotEmpty()) {
+                notes += "Explicit constraints are surfaced in the plan."
+            } else {
+                issues += "Requests with explicit constraints must include visible constraint handling."
             }
-            notes += "Explicit constraints are surfaced in the plan."
         }
 
-        require(plan.assumptions.isNotEmpty()) {
-            "Plan must include assumptions for underspecified planning details."
+        if (plan.assumptions.isNotEmpty()) {
+            notes += "Plan includes assumptions the household can correct later."
+        } else {
+            issues += "Plan must include assumptions for underspecified planning details."
         }
-        notes += "Plan includes assumptions the household can correct later."
 
         val moralizingTerms = listOf("cheat meal", "guilt", "bad food", "clean eating", "calorie compliance")
         val planText = plan.toString().lowercase()
-        require(moralizingTerms.none { it in planText }) {
-            "Plan must avoid moralizing or calorie-compliance language."
+        if (moralizingTerms.none { it in planText }) {
+            notes += "Tone avoids moralizing nutrition language."
+        } else {
+            issues += "Plan must avoid moralizing or calorie-compliance language."
         }
-        notes += "Tone avoids moralizing nutrition language."
 
-        return ValidatedWeeklyLunchPlan(plan = plan, validationNotes = notes)
+        return ValidationInspection(notes = notes, issues = issues)
     }
+
+    private fun repairWeeklyLunchPlan(
+        plan: WeeklyLunchPlan,
+        constraints: RequestConstraints,
+        defaults: LunchPlanningDefaults,
+        issues: List<String>,
+        attempt: Int,
+        context: OperationContext,
+    ): WeeklyLunchPlan =
+        context.ai()
+            .withDefaultLlm()
+            .withId("meal-planner-repair-plan-$attempt")
+            .withSystemPrompt("You repair structured weekly lunch plans by fixing validation issues without changing valid content unnecessarily.")
+            .createObject(
+                prompt = buildRepairPrompt(plan, constraints, defaults, issues),
+                outputClass = WeeklyLunchPlan::class.java,
+            )
 
     @AchievesGoal(
         description = "Return a structured five-lunch weekday plan for Thomas and Cassandra.",
@@ -297,6 +366,27 @@ class MealPlannerAgent(
         ${validatedPlan.asPromptBlock()}
     """.trimIndent()
 
+    private fun buildRepairPrompt(
+        plan: WeeklyLunchPlan,
+        constraints: RequestConstraints,
+        defaults: LunchPlanningDefaults,
+        issues: List<String>,
+    ): String = """
+        ${prompts.load("repair-plan")}
+
+        # Validation Issues To Fix
+        ${issues.joinToString("\n") { "- $it" }}
+
+        # Defaults
+        ${defaults.asPromptBlock()}
+
+        # Request Constraints
+        ${constraints.asPromptBlock()}
+
+        # Current Plan
+        ${plan.asPromptBlock()}
+    """.trimIndent()
+
     private fun LunchPlanningDefaults.asPromptBlock(): String = """
         Planning unit: $planningUnit
         Meal count: $mealCount
@@ -347,19 +437,23 @@ class MealPlannerAgent(
             """.trimIndent()
         }
 
+    private fun WeeklyLunchPlan.asPromptBlock(): String = """
+        Plan week: $weekStart to $weekEnd
+        Lunches:
+        ${lunches.joinToString("\n") { lunch ->
+            "- ${lunch.day} ${lunch.date}: ${lunch.title}; ${lunch.description}; fit: ${lunch.whyItFits}; nutrition: ${lunch.nutritionNote}; prep: ${lunch.prepOrLeftoverNote ?: "none"}; constraints: ${lunch.constraintHandling.joinToString()}"
+        }}
+        Visible constraint handling:
+        ${visibleConstraintHandling.joinToString("\n") { "- $it" }}
+        Assumptions:
+        ${assumptions.joinToString("\n") { "- ${it.description}" }}
+    """.trimIndent()
+
     private fun ValidatedWeeklyLunchPlan.asPromptBlock(): String = """
         Validation notes:
         ${validationNotes.joinToString("\n") { "- $it" }}
 
-        Plan week: ${plan.weekStart} to ${plan.weekEnd}
-        Lunches:
-        ${plan.lunches.joinToString("\n") { lunch ->
-            "- ${lunch.day} ${lunch.date}: ${lunch.title}; ${lunch.description}; fit: ${lunch.whyItFits}; nutrition: ${lunch.nutritionNote}; prep: ${lunch.prepOrLeftoverNote ?: "none"}; constraints: ${lunch.constraintHandling.joinToString()}"
-        }}
-        Visible constraint handling:
-        ${plan.visibleConstraintHandling.joinToString("\n") { "- $it" }}
-        Assumptions:
-        ${plan.assumptions.joinToString("\n") { "- ${it.description}" }}
+        ${plan.asPromptBlock()}
     """.trimIndent()
 
     private fun RequestConstraints.hasVisibleConstraints(): Boolean =
@@ -370,5 +464,11 @@ class MealPlannerAgent(
 
     private companion object {
         val ISO_DATE = Regex("""\b\d{4}-\d{2}-\d{2}\b""")
+        const val MAX_REPAIR_ATTEMPTS = 2
     }
+
+    private data class ValidationInspection(
+        val notes: List<String>,
+        val issues: List<String>,
+    )
 }

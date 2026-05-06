@@ -73,6 +73,7 @@ class MealPlannerAgentTest {
 
     @Test
     fun `validation accepts a five lunch plan with visible constraints and assumptions`() {
+        val context = FakeOperationContext.create()
         val constraints = RequestConstraints(
             explicitConstraints = listOf("avoid mushrooms"),
             avoidIngredients = listOf("mushrooms"),
@@ -82,33 +83,53 @@ class MealPlannerAgentTest {
             plan = validPlan(),
             constraints = constraints,
             defaults = LunchPlanningDefaults(),
+            context = context,
         )
 
         assertTrue(validated.validationNotes.any { it.contains("Monday-Friday") })
         assertEquals(5, validated.plan.lunches.size)
+        assertEquals(0, context.llmInvocations.size)
     }
 
     @Test
-    fun `validation rejects constrained plans without visible constraint handling`() {
+    fun `validation repairs constrained plans without visible constraint handling`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse(validPlan())
         val plan = validPlan().copy(visibleConstraintHandling = emptyList())
         val constraints = RequestConstraints(avoidIngredients = listOf("mushrooms"))
 
-        val failure = assertThrows(IllegalArgumentException::class.java) {
-            agent.validateWeeklyLunchPlan(plan, constraints, LunchPlanningDefaults())
-        }
+        val validated = agent.validateWeeklyLunchPlan(plan, constraints, LunchPlanningDefaults(), context)
 
-        assertTrue(failure.message!!.contains("visible constraint handling"))
+        assertEquals(validPlan(), validated.plan)
+        assertEquals("meal-planner-repair-plan-1", context.llmInvocations.first().interaction.id.value)
+        assertTrue(context.llmInvocations.first().prompt.contains("visible constraint handling"))
     }
 
     @Test
-    fun `validation rejects missing assumptions`() {
+    fun `validation repairs missing assumptions`() {
+        val context = FakeOperationContext.create()
+        context.expectResponse(validPlan())
         val plan = validPlan().copy(assumptions = emptyList())
 
-        val failure = assertThrows(IllegalArgumentException::class.java) {
-            agent.validateWeeklyLunchPlan(plan, RequestConstraints(), LunchPlanningDefaults())
+        val validated = agent.validateWeeklyLunchPlan(plan, RequestConstraints(), LunchPlanningDefaults(), context)
+
+        assertEquals(validPlan(), validated.plan)
+        assertTrue(context.llmInvocations.first().prompt.contains("assumptions"))
+    }
+
+    @Test
+    fun `validation fails after bounded unsuccessful repairs`() {
+        val context = FakeOperationContext.create()
+        val invalidPlan = validPlan().copy(assumptions = emptyList())
+        context.expectResponse(invalidPlan)
+        context.expectResponse(invalidPlan)
+
+        val failure = assertThrows(IllegalStateException::class.java) {
+            agent.validateWeeklyLunchPlan(invalidPlan, RequestConstraints(), LunchPlanningDefaults(), context)
         }
 
-        assertTrue(failure.message!!.contains("assumptions"))
+        assertTrue(failure.message!!.contains("2 repair attempts"))
+        assertEquals(2, context.llmInvocations.size)
     }
 
     @Test
