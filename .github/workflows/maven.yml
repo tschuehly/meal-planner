@@ -30,23 +30,5 @@ jobs:
         run: |
           mkdir -p /home/runner
           echo "testcontainers.reuse.enable=true" > /home/runner/.testcontainers.properties
-      - name: Build and analyze
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}  # Needed to get PR information, if any
-          SONAR_TOKEN: ${{ secrets.SONAR_TOKEN }}
+      - name: Build
         run: mvn -U -B test verify
-
-  notify:
-    needs: [build]
-    if: failure() && github.ref == 'refs/heads/main'
-    uses: embabel/embabel-build/.github/workflows/discord-notify.yml@main
-    secrets: inherit
-    
-  notify-recovery:
-    needs: [build]
-    if: success() && github.ref == 'refs/heads/main'
-    uses: embabel/embabel-build/.github/workflows/notify-recovery.yml@main
-    with:
-      branch: main
-      caller_run_id: ${{ github.run_id }}
-    secrets: inherit

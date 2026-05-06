@@ -8,12 +8,12 @@
         <version>3.5.11</version>
         <relativePath/> <!-- Lookup parent from repository -->
     </parent>
-    <groupId>com.embabel.template</groupId>
-    <artifactId>ProjectName</artifactId>
+    <groupId>com.embabel.mealplanner</groupId>
+    <artifactId>meal-planner</artifactId>
     <version>0.1.0-SNAPSHOT</version>
     <packaging>jar</packaging>
-    <name>My first agent</name>
-    <description>Generated agent project</description>
+    <name>Meal Planner</name>
+    <description>Private household meal planning agent</description>
 
     <properties>
         <java.version>21</java.version>
@@ -115,26 +115,5 @@
             </dependencies>
         </profile>
     </profiles>
-
-    <!-- Uncomment these lines to enable Embabel repositories and use snapshots -->
-    <!--    <repositories>-->
-    <!--        <repository>-->
-    <!--            <id>embabel-releases</id>-->
-    <!--            <url>https://repo.embabel.com/artifactory/libs-release</url>-->
-    <!--            <snapshots>-->
-    <!--                <enabled>false</enabled>-->
-    <!--            </snapshots>-->
-    <!--        </repository>-->
-    <!--        <repository>-->
-    <!--            <id>embabel-snapshots</id>-->
-    <!--            <url>https://repo.embabel.com/artifactory/libs-snapshot</url>-->
-    <!--            <releases>-->
-    <!--                <enabled>false</enabled>-->
-    <!--            </releases>-->
-    <!--            <snapshots>-->
-    <!--                <enabled>true</enabled>-->
-    <!--            </snapshots>-->
-    <!--        </repository>-->
-    <!--    </repositories>-->
 
 </project>

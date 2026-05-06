@@ -50,7 +50,7 @@ Add the following to your `application.properties`:
 embabel.models.default-llm=us.anthropic.claude-3-5-sonnet-20240620-v1:0
 embabel.agent.platform.ranking.llm=us.anthropic.claude-3-5-sonnet-20240620-v1:0
 spring.ai.bedrock.anthropic.chat.inference-profile-id=us.anthropic.claude-3-5-sonnet-20240620-v1:0
-spring.profiles.active=starwars,bedrock
+spring.profiles.active=bedrock
 ```
 
 ## 5. Run the Project
@@ -64,4 +64,3 @@ After configuration, run the project using:
 ## Additional Links
 
 Spring AI and Amazon Bedrock [documentation]([https://docs.spring.io/spring-ai/reference/api/bedrock.html])
-
