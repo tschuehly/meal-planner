@@ -61,22 +61,22 @@ models
 agents
 ```
 
-Start a chat session:
+Run one lunch-planning request with one-shot execution:
 
 ```text
-chat
+x "Plan high-protein weekday lunches for Thomas and Cassandra next week. Avoid mushrooms, keep prep easy, and use chickpeas if they fit."
 ```
 
-Then enter one lunch-planning request, for example:
+The long-form command is also supported:
 
 ```text
-Plan high-protein weekday lunches for Thomas and Cassandra next week. Avoid mushrooms, keep prep easy, and use chickpeas if they fit.
+execute "Plan high-protein weekday lunches for Thomas and Cassandra next week. Avoid mushrooms, keep prep easy, and use chickpeas if they fit."
 ```
 
 You can also paste recipe text into the same request:
 
 ```text
-Plan lunches for next week and avoid mushrooms. Use this recipe as inspiration for one lunch only: roasted chickpeas with lemon yogurt, cucumber, herbs, and rice.
+x "Plan lunches for next week and avoid mushrooms. Use this recipe as inspiration for one lunch only: roasted chickpeas with lemon yogurt, cucumber, herbs, and rice."
 ```
 
 The response should include:
